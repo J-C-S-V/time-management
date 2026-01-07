@@ -241,19 +241,47 @@ export default function KanbanTimer() {
     setTasks(
       tasks.map((task) => {
         if (task.id === id) {
-          if (!task.isRunning) {
-            const totalSeconds = task.minutes * 60 + task.seconds;
-            const startTime = Date.now();
+          if (task.isRunning) {
+            // PAUSE LOGIC
+            const elapsed = task.startTime
+              ? Math.floor((Date.now() - task.startTime) / 1000)
+              : 0;
+
+            const newTimeLeft = Math.max(0, task.originalTime - elapsed);
+
+            return {
+              ...task,
+              isRunning: false,
+              timeLeft: newTimeLeft,
+              startTime: undefined,
+            };
+          } else {
+            // START / RESUME LOGIC
+            const totalInputSeconds = task.minutes * 60 + task.seconds;
+
+            const isResuming =
+              task.timeLeft > 0 &&
+              !task.alarmPlayed &&
+              task.timeLeft < totalInputSeconds;
+
+            const activeOriginalTime =
+              isResuming && task.originalTime > 0
+                ? task.originalTime
+                : totalInputSeconds;
+
+            const timeToRun = isResuming ? task.timeLeft : activeOriginalTime;
+
+            const startTime =
+              Date.now() - (activeOriginalTime - timeToRun) * 1000;
+
             return {
               ...task,
               isRunning: true,
-              timeLeft: totalSeconds,
-              originalTime: totalSeconds,
-              alarmPlayed: false,
+              originalTime: activeOriginalTime,
+              timeLeft: timeToRun,
               startTime: startTime,
+              alarmPlayed: false,
             };
-          } else {
-            return { ...task, isRunning: false, startTime: undefined };
           }
         }
         return task;
@@ -284,7 +312,6 @@ export default function KanbanTimer() {
       setTasks((prevTasks) =>
         prevTasks.map((task) => {
           if (task.isRunning && task.startTime) {
-            // Calculate elapsed time based on actual clock time
             const elapsed = Math.floor((Date.now() - task.startTime) / 1000);
             const newTimeLeft = Math.max(0, task.originalTime - elapsed);
 
@@ -303,7 +330,7 @@ export default function KanbanTimer() {
           return task;
         })
       );
-    }, 100); // Check more frequently (every 100ms) for better accuracy
+    }, 100);
 
     return () => clearInterval(interval);
   }, [selectedAlarm]);
@@ -459,7 +486,7 @@ export default function KanbanTimer() {
                   <span className="text-gray-600 font-medium">sec</span>
                 </div>
 
-                {task.isRunning && (
+                {(task.isRunning || task.timeLeft > 0) && (
                   <div className="text-2xl font-bold text-blue-600 ml-4">
                     {formatTime(task.timeLeft)}
                   </div>
